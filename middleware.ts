@@ -1,16 +1,25 @@
+import { Ratelimit } from '@upstash/ratelimit';
+import { Redis } from '@upstash/redis';
 import { NextResponse } from 'next/server';
 
-export function middleware(request) {
-    const start = Date.now();
-    
-    // Log the start
-    console.log(`[START] ${request.method} ${request.url}`);
+const ratelimit = new Ratelimit({
+  redis: Redis.fromEnv(),
+  // Limits: 20 requests every 10 seconds
+  limiter: Ratelimit.slidingWindow(20, '10 s'),
+});
 
-    const response = NextResponse.next();
+export async function middleware(request) {
+  const ip = request.ip ?? 'anonymous';
+  
+  const { success } = await ratelimit.limit(ip);
 
-    // Log the end (using a custom header to track time)
-    response.headers.set('x-response-time', `${Date.now() - start}ms`);
-    console.log(`[END] ${request.url} took ${Date.now() - start}ms`);
+  if (!success) {
+    return new NextResponse('Too Many Requests - Wait a bit!', { status: 429 });
+  }
 
-    return response;
+  return NextResponse.next();
 }
+
+export const config = {
+  matcher: '/api/:path*',
+};
