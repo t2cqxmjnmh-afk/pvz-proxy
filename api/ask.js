@@ -24,9 +24,16 @@ export default async function handler(req, res) {
   }
 
   try {
-    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent?key=${apiKey}`, {
+    const startTime = Date.now();
+    console.log('Starting Gemini API call...');
+    
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 25000); // 25 second limit
+    
+    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
+      signal: controller.signal,
       body: JSON.stringify({
         contents: [{ 
           parts: [
@@ -37,10 +44,14 @@ export default async function handler(req, res) {
       })
     });
 
+    clearTimeout(timeoutId);
+    const elapsed = Date.now() - startTime;
+    console.log(`Gemini API responded in ${elapsed}ms`);
+
     const data = await response.json();
     res.status(200).json(data);
   } catch (error) {
-    console.error('Error:', error);
-    res.status(500).json({ error: "Internal server error" });
+    console.error('Error:', error.message);
+    res.status(500).json({ error: error.message === 'The operation was aborted' ? "Request timeout" : "Internal server error" });
   }
 }
